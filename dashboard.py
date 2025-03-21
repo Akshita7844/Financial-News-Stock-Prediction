@@ -27,6 +27,7 @@ popular_stocks = {
 selected_label = st.sidebar.selectbox("Select Stock:", list(popular_stocks.keys()))
 selected_stock, stock_name = popular_stocks[selected_label]
 threshold = st.sidebar.slider("Prediction Threshold", 0.5, 0.99, 0.7, 0.01)
+price_change_threshold = st.sidebar.slider("Price Change Threshold (%)", 0.1, 2.0, 0.5, 0.1)
 
 # --- Load FinBERT ---
 @st.cache_resource
@@ -121,23 +122,35 @@ with st.spinner("Fetching latest news..."):
 
             # --- Compare Prediction with Reality ---
             try:
-                stock_data = yf.download(selected_stock, period="2mo")
+                stock_data = yf.download(selected_stock, period="3mo")
                 stock_data = stock_data.reset_index()
                 stock_data['Date'] = pd.to_datetime(stock_data['Date']).dt.date
 
                 stock_data['Prev_Close'] = stock_data['Close'].shift(1)
-                stock_data['Real_Change'] = stock_data.apply(
-                    lambda row: 'up' if row['Close'] > row['Prev_Close'] else 'down', axis=1
-                )
+                stock_data['Pct_Change'] = ((stock_data['Close'] - stock_data['Prev_Close']) / stock_data['Prev_Close']) * 100
+
+                def real_movement(pct_change):
+                    if pct_change >= price_change_threshold:
+                        return 'up'
+                    elif pct_change <= -price_change_threshold:
+                        return 'down'
+                    else:
+                        return 'neutral'
+
+                stock_data['Real_Change'] = stock_data['Pct_Change'].apply(real_movement)
                 stock_data_clean = stock_data.dropna(subset=['Prev_Close'])[['Date', 'Real_Change']]
 
-                comparison_df = pd.merge(daily_sentiment, stock_data_clean, left_on='date', right_on='Date', how='inner')
+                # Shift sentiment predictions to predict next day movement
+                daily_sentiment['Prediction_Date'] = pd.to_datetime(daily_sentiment['date']) + pd.Timedelta(days=1)
+                daily_sentiment['Prediction_Date'] = daily_sentiment['Prediction_Date'].dt.date
+
+                comparison_df = pd.merge(daily_sentiment, stock_data_clean, left_on='Prediction_Date', right_on='Date', how='inner')
                 comparison_df['Correct'] = comparison_df['Prediction'] == comparison_df['Real_Change']
                 filtered_df = comparison_df[comparison_df['Prediction'] != 'neutral']
                 accuracy = filtered_df['Correct'].mean() * 100
 
                 st.subheader("🔍 Prediction vs Reality")
-                st.dataframe(filtered_df[['date', 'Prediction', 'Real_Change', 'Correct']])
+                st.dataframe(filtered_df[['date', 'Prediction_Date', 'Prediction', 'Real_Change', 'Correct']])
                 st.success(f"📊 Prediction Accuracy (excluding neutral): {accuracy:.2f}%")
 
                 # --- Summary & Stock Chart ---
