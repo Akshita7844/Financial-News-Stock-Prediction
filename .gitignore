@@ -1,2 +1,13 @@
 .streamlit/secrets.toml
 models/finbert/**
+
+__pycache__/
+*.pyc
+
+.ipynb_checkpoints/
+
+env/
+venv/
+.new_env/
+
+.DS_Store
