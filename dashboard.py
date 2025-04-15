@@ -50,7 +50,7 @@ def get_sentiment(text):
 
 # --- Fetch News using NewsAPI ---
 st.subheader(f"📰 Latest News for {stock_name}")
-API_KEY = '9c9b055b9586410b82de1d8775c449e7'
+API_KEY = st.secrets["news_api_key"]
 news_url = 'https://newsapi.org/v2/everything'
 
 params = {
